@@ -214,7 +214,8 @@ Examples:
 
 Usage: niv add [-n|--name NAME] PACKAGE ([-a|--attribute KEY=VAL] |
                [-b|--branch BRANCH] | [-o|--owner OWNER] | [-r|--repo REPO] |
-               [-v|--version VERSION] | [-t|--template URL])
+               [-v|--version VERSION] | [-t|--template URL] |
+               [-f|--fetcher FETCHER])
   Add dependency
 
 Available options:
@@ -226,6 +227,9 @@ Available options:
   -v,--version VERSION     Equivalent to --attribute version=<VERSION>
   -t,--template URL        Used during 'update' when building URL. Occurrences
                            of <foo> are replaced with attribute 'foo'.
+  -f,--fetcher FETCHER     The fetcher used by Nix at evaluation time. Value can
+                           be either 'fetchurl' or 'fetchTarball'. If not set,
+                           value is inferred from the suffix of the URL.
   -h,--help                Show this help text
 
 ```
@@ -241,7 +245,7 @@ Examples:
 
 Usage: niv update [PACKAGE] ([-a|--attribute KEY=VAL] | [-b|--branch BRANCH] |
                   [-o|--owner OWNER] | [-r|--repo REPO] | [-v|--version VERSION]
-                  | [-t|--template URL])
+                  | [-t|--template URL] | [-f|--fetcher FETCHER])
   Update dependencies
 
 Available options:
@@ -252,6 +256,9 @@ Available options:
   -v,--version VERSION     Equivalent to --attribute version=<VERSION>
   -t,--template URL        Used during 'update' when building URL. Occurrences
                            of <foo> are replaced with attribute 'foo'.
+  -f,--fetcher FETCHER     The fetcher used by Nix at evaluation time. Value can
+                           be either 'fetchurl' or 'fetchTarball'. If not set,
+                           value is inferred from the suffix of the URL.
   -h,--help                Show this help text
 
 ```

@@ -101,6 +101,12 @@ parsePackageSpec =
           Opts.short 't' <>
           Opts.metavar "URL" <>
           Opts.help "Used during 'update' when building URL. Occurrences of <foo> are replaced with attribute 'foo'."
+        )) <|>
+      (("fetcher",) <$> Opts.strOption
+        ( Opts.long "fetcher" <>
+          Opts.short 'f' <>
+          Opts.metavar "FETCHER" <>
+          Opts.help "The fetcher used by Nix at evaluation time. Value can be either 'fetchurl' or 'fetchTarball'. If not set, value is inferred from the suffix of the URL."
         ))
 
     -- Parse "key=val" into ("key", "val")
