@@ -13,6 +13,7 @@ import Control.Monad
 import Control.Monad.State
 import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
 import Data.Char (toUpper)
+import Data.Functor ((<&>))
 import Data.Hashable (Hashable)
 import Data.Maybe (mapMaybe, fromMaybe)
 import Data.String.QQ (s)
@@ -167,7 +168,11 @@ updatePackageSpec = execStateT $ do
     prefetch :: Aeson.Value -> StateT PackageSpec IO ()
     prefetch = \case
       Aeson.String (T.unpack -> url) -> do
-        sha256 <- liftIO $ nixPrefetchURL url
+        unpack <- getPackageSpecAttr "fetcher" <&> \case
+          -- Do not unpack if the fetcher is fetchurl
+          Just (Aeson.String fetcher) -> not $ T.unpack fetcher == "fetchurl"
+          _ -> True
+        sha256 <- liftIO $ nixPrefetchURL unpack url
         setPackageSpecAttr "sha256" (Aeson.String $ T.pack sha256)
       _ -> pure ()
 
@@ -220,6 +225,12 @@ completePackageSpec = execStateT $ do
       setPackageSpecAttr
         "url_template"
         (Aeson.String $ T.pack githubURLTemplate)
+
+    -- Sets a default value to the fetcher
+    whenNotSet "fetcher" $
+      setPackageSpecAttr
+        "fetcher"
+        (Aeson.String $ T.pack "fetchTarball")
 
   where
     githubURLTemplate :: String
@@ -564,12 +575,13 @@ abort msg = do
     putStrLn msg
     exitFailure
 
-nixPrefetchURL :: String -> IO String
-nixPrefetchURL url =
-    lines <$> readProcess "nix-prefetch-url" ["--unpack", url] "" >>=
+nixPrefetchURL :: Bool -> String -> IO String
+nixPrefetchURL unpack url =
+    lines <$> readProcess "nix-prefetch-url" args "" >>=
       \case
         (l:_) -> pure l
         _ -> abortNixPrefetchExpectedOutput
+  where args = if unpack then ["--unpack", url] else [url]
 
 -------------------------------------------------------------------------------
 -- Files and their content
@@ -583,8 +595,7 @@ pathNixSourcesNix = "nix" </> "sources.nix"
 initNixSourcesNixContent :: String
 initNixSourcesNixContent = [s|
 # A record, from name to path, of the third-party packages
-with
-{
+let
   sources = builtins.fromJSON (builtins.readFile ./sources.json);
 
   # fetchTarball version that is compatible between all the sources of Nix
@@ -597,10 +608,19 @@ with
   mapAttrs = builtins.mapAttrs or
     (f: set: with builtins;
       listToAttrs (map (attr: { name = attr; value = f attr set.${attr}; }) (attrNames set)));
-};
+
+  getFetcher = spec:
+    let fetcherName =
+      if builtins.hasAttr "fetcher" spec
+      then builtins.getAttr "fetcher" spec
+      else "fetchTarball";
+    in builtins.getAttr fetcherName {
+      "fetchTarball" = fetchTarball;
+      "fetchurl" = builtins.fetchurl;
+    };
 
 # NOTE: spec must _not_ have an "outPath" attribute
-mapAttrs (_: spec:
+in mapAttrs (_: spec:
   if builtins.hasAttr "outPath" spec
   then abort
     "The values in sources.json should not have an 'outPath' attribute"
@@ -608,7 +628,7 @@ mapAttrs (_: spec:
     if builtins.hasAttr "url" spec && builtins.hasAttr "sha256" spec
     then
       spec //
-    { outPath = fetchTarball { inherit (spec) url sha256; } ; }
+      { outPath = getFetcher spec { inherit (spec) url sha256; } ; }
     else spec
   ) sources
 |]
