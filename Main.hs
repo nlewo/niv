@@ -154,6 +154,20 @@ updatePackageSpec = execStateT $ do
       _ -> pure ()
       )
 
+    -- If the fetcher attribute is not set, we try to infer its value based on the url suffix
+    (,) <$> getPackageSpecAttr "fetcher" <*> getPackageSpecAttr "url" >>= \case
+      -- If a fetcher is set, we'll use it
+      (Just _, _) -> pure ()
+      -- We need an url to infer a fetcher
+      (_, Nothing) -> pure ()
+      (Nothing, Just (Aeson.String url)) -> do
+         let fetcher = if "tar.gz" `T.isSuffixOf` url
+                       then "fetchTarball"
+                       else "fetchurl"
+         setPackageSpecAttr "fetcher" (Aeson.String $ T.pack fetcher)
+      -- If the JSON value is not a string, we ignore it
+      (_, _) -> pure ()
+
     -- Updates the sha256 based on the URL contents
     (,) <$> getPackageSpecAttr "url" <*> getPackageSpecAttr "sha256" >>= \case
       -- If no URL is set, we simply can't prefetch
@@ -225,12 +239,6 @@ completePackageSpec = execStateT $ do
       setPackageSpecAttr
         "url_template"
         (Aeson.String $ T.pack githubURLTemplate)
-
-    -- Sets a default value to the fetcher
-    whenNotSet "fetcher" $
-      setPackageSpecAttr
-        "fetcher"
-        (Aeson.String $ T.pack "fetchTarball")
 
   where
     githubURLTemplate :: String
