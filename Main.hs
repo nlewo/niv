@@ -608,9 +608,17 @@ pathNixSourcesNix = "nix" </> "sources.nix"
 -- | Glue code between nix and sources.json
 initNixSourcesNixContent :: String
 initNixSourcesNixContent = [s|
+{
+  nixpkgs ? <nixpkgs>,
+  # The default is false in nix.conf
+  restrictedEvalMode ? true,
+}:
+
 # A record, from name to path, of the third-party packages
 with rec
 {
+  pkgs = import nixpkgs {};
+
   sources = builtins.fromJSON (builtins.readFile ./sources.json);
 
   # fetchTarball version that is compatible between all the sources of Nix
@@ -623,16 +631,24 @@ with rec
   mapAttrs = builtins.mapAttrs or
     (f: set: with builtins;
       listToAttrs (map (attr: { name = attr; value = f attr set.${attr}; }) (attrNames set)));
+      
+  restrictedEvalFetchers = {
+    "fetchTarball" = builtins.fetchTarball;
+    "fetchurl" = builtins.fetchurl;
+  };
+  evalFetchers = {
+    "fetchTarball" = pkgs.fetchzip;
+    "fetchurl" = pkgs.fetchurl;
+  };
 
   getFetcher = spec:
-    let fetcherName =
-      if builtins.hasAttr "fetcher" spec
-      then builtins.getAttr "fetcher" spec
-      else "fetchTarball";
-    in builtins.getAttr fetcherName {
-      "fetchTarball" = fetchTarball;
-      "fetchurl" = builtins.fetchurl;
-    };
+    let
+      fetchers = if restrictedEvalMode then restrictedEvalFetchers else evalFetchers;
+      fetcherName =
+        if builtins.hasAttr "fetcher" spec
+        then builtins.getAttr "fetcher" spec
+        else "fetchTarball";
+    in builtins.getAttr fetcherName  fetchers;
 };
 # NOTE: spec must _not_ have an "outPath" attribute
 mapAttrs (_: spec:
